@@ -315,7 +315,7 @@
       const pagePosts = state.filteredPosts.slice(start, end);
       
       grid.innerHTML = pagePosts.map((post, i) => {
-        const img = post.featured_image_url || 'https://www.mendoza.edu.ar/wp-content/uploads/2024/10/normativa-e1755614909181.jpg';
+        const img = post.featured_image_url || 'https://www.mendoza.edu.ar/wp-content/uploads/2026/04/defecto-sin-destacadas.png';
         const area = getAreaName(post);
         const nivel = getNivelName(post);
         return '<article class="card" data-id="' + post.id + '" style="animation-delay: ' + (i * 0.02) + 's" onclick="showDetail(' + post.id + ')">' +
