@@ -258,14 +258,48 @@
       // Búsqueda difusa con Fuse
       let results = state.searchQuery ? state.fuse.search(state.searchQuery).map(r => r.item) : [...state.allPosts];
       
-      // Filtro personalizado: mantener solo resultados donde TODAS las palabras están presentes
+      // Quitar tildes para comparación
+      const removeAccents = str => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      
+      // Priorización: si la frase/o palabras clave están en el título aparece primero
+      let hasPriority = false;
       if (state.searchQuery) {
-        const queryWords = state.searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+        const queryLower = state.searchQuery.toLowerCase();
+        const queryNorm = removeAccents(queryLower);
+        const queryWords = queryNorm.split(/\s+/).filter(Boolean);
+        
         if (queryWords.length > 0) {
-          results = results.filter(r => {
-            const content = (r.title + ' ' + (r.content_text || '') + ' ' + (r.search_blob || '')).toLowerCase();
-            return queryWords.every(word => content.includes(word));
+          results = results.map(post => {
+            const titleNorm = removeAccents((post.title || '').toLowerCase());
+            const contentNorm = removeAccents(((post.content_text || '') + ' ' + (post.search_blob || '')).toLowerCase());
+            
+            let priority = 0;
+            
+            // Si la frase completa está en el título (sin tildes)
+            if (titleNorm.includes(queryNorm)) priority += 100;
+            // Si la frase completa está en el contenido
+            if (contentNorm.includes(queryNorm)) priority += 50;
+            
+            // Peso por palabras clave (sin tildes, minimo 3 letras)
+            queryWords.forEach(word => {
+              if (word.length > 2) {
+                if (titleNorm.includes(word)) priority += 10;
+                if (contentNorm.includes(word)) priority += 1;
+              }
+            });
+            
+            return { ...post, _priority: priority };
           });
+          
+          // Filtrar solo los que tienen todas las palabras (sin tildes)
+          results = results.filter(post => {
+            const titleNorm = removeAccents((post.title || '').toLowerCase());
+            const contentNorm = removeAccents(((post.content_text || '') + ' ' + (post.search_blob || '')).toLowerCase());
+            const allNorm = titleNorm + ' ' + contentNorm;
+            return queryWords.every(word => allNorm.includes(word));
+          });
+          
+          hasPriority = true;
         }
       }
       
@@ -303,9 +337,29 @@
     
     function sortPosts(posts) {
       const sorted = [...posts];
+      // Verificar si hay resultados con prioridad
+      const hasPriority = sorted.some(p => p._priority > 0);
+      
       switch (state.sortBy) {
-        case 'date-desc': return sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
-        case 'date-asc': return sorted.sort((a, b) => new Date(a.date) - new Date(b.date));
+        case 'date-desc': 
+          return sorted.sort((a, b) => {
+            // Si hay prioridad, usar: prioridad primero, luego fecha
+            if (hasPriority) {
+              const pa = a._priority || 0;
+              const pb = b._priority || 0;
+              if (pa !== pb) return pb - pa;
+            }
+            return new Date(b.date) - new Date(a.date);
+          });
+        case 'date-asc': 
+          return sorted.sort((a, b) => {
+            if (hasPriority) {
+              const pa = a._priority || 0;
+              const pb = b._priority || 0;
+              if (pa !== pb) return pb - pa;
+            }
+            return new Date(a.date) - new Date(b.date);
+          });
         case 'title-asc': return sorted.sort((a, b) => a.title.localeCompare(b.title, 'es'));
         case 'title-desc': return sorted.sort((a, b) => b.title.localeCompare(a.title, 'es'));
         default: return sorted;
@@ -313,6 +367,9 @@
     }
     
     function renderResults() {
+      // Limpiar campo temporal _priority antes de renderizar
+      state.filteredPosts = state.filteredPosts.map(({ _priority, ...post }) => post);
+      
       const grid = $('resultsGrid');
       const total = state.filteredPosts.length;
       const totalPages = Math.ceil(total / CONFIG.resultsPerPage);
