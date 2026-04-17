@@ -337,29 +337,21 @@
     
     function sortPosts(posts) {
       const sorted = [...posts];
-      // Verificar si hay resultados con prioridad
-      const hasPriority = sorted.some(p => p._priority > 0);
       
+      // Ordenar por prioridad SIEMPRE (antes de cualquier otro criterio)
+      sorted.sort((a, b) => {
+        const pa = a._priority || 0;
+        const pb = b._priority || 0;
+        if (pa !== pb) return pb - pa; // Mayor prioridad primero
+        return 0;
+      });
+      
+      // Luego aplicar el orden seleccionado solo para desempates
       switch (state.sortBy) {
         case 'date-desc': 
-          return sorted.sort((a, b) => {
-            // Si hay prioridad, usar: prioridad primero, luego fecha
-            if (hasPriority) {
-              const pa = a._priority || 0;
-              const pb = b._priority || 0;
-              if (pa !== pb) return pb - pa;
-            }
-            return new Date(b.date) - new Date(a.date);
-          });
+          return sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
         case 'date-asc': 
-          return sorted.sort((a, b) => {
-            if (hasPriority) {
-              const pa = a._priority || 0;
-              const pb = b._priority || 0;
-              if (pa !== pb) return pb - pa;
-            }
-            return new Date(a.date) - new Date(b.date);
-          });
+          return sorted.sort((a, b) => new Date(a.date) - new Date(b.date));
         case 'title-asc': return sorted.sort((a, b) => a.title.localeCompare(b.title, 'es'));
         case 'title-desc': return sorted.sort((a, b) => b.title.localeCompare(a.title, 'es'));
         default: return sorted;
