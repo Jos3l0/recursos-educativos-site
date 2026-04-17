@@ -197,11 +197,12 @@
     function initFuse() {
       state.fuse = new Fuse(state.allPosts, {
         keys: CONFIG.fuseKeys,
-        threshold: 0.3,
+        threshold: 0.4,
         ignoreLocation: true,
         includeMatches: true,
         includeScore: true,
-        minMatchCharLength: 2
+        minMatchCharLength: 3,
+        findAllMatches: false
       });
     }
     
@@ -254,7 +255,19 @@
     }
     
     function applyFilters() {
+      // Búsqueda difusa con Fuse
       let results = state.searchQuery ? state.fuse.search(state.searchQuery).map(r => r.item) : [...state.allPosts];
+      
+      // Filtro personalizado: mantener solo resultados donde TODAS las palabras están presentes
+      if (state.searchQuery) {
+        const queryWords = state.searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+        if (queryWords.length > 0) {
+          results = results.filter(r => {
+            const content = (r.title + ' ' + (r.content_text || '') + ' ' + (r.search_blob || '')).toLowerCase();
+            return queryWords.every(word => content.includes(word));
+          });
+        }
+      }
       
       if (activeFilters.area.length > 0 || activeFilters.nivel.length > 0 || activeFilters.destinatario.length > 0) {
         const idSets = [];
@@ -423,6 +436,19 @@
       content = content.replace(/<iframe/g, '<iframe style="width:100%;height:450px;border:none;margin:1rem 0;border-radius:8px;"');
       return content;
     }
+    
+    function debounce(fn, ms) {
+      let timeout;
+      return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => fn.apply(this, args), ms);
+      };
+    }
+    
+    const handleSearchInput = debounce(function() {
+      state.searchQuery = $('searchInput').value.trim();
+      applyFilters();
+    }, 200);
     
     function handleSearch(e) { e.preventDefault(); state.searchQuery = $('searchInput').value.trim(); applyFilters(); }
     function handleSort(value) { state.sortBy = value; applyFilters(); }
